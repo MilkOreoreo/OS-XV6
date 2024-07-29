@@ -36,3 +36,5 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+entry("trace"); #Lab2.1
+entry("sysinfo"); #Lab2.2
