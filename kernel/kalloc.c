@@ -23,6 +23,10 @@ struct {
   struct run *freelist;
 } kmem;
 
+// Lab 05: the reference count of physical memory page
+int useReference[PHYSTOP/PGSIZE];
+struct spinlock ref_count_lock;
+
 void
 kinit()
 {
@@ -44,12 +48,21 @@ freerange(void *pa_start, void *pa_end)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(void *pa)
+kfree(void *pa) // Lab 05 Modified
 {
   struct run *r;
+  int temp;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+
+  acquire(&ref_count_lock);
+  // decrease the reference count, if use reference is not zero, then return
+  useReference[(uint64)pa/PGSIZE] -= 1;
+  temp = useReference[(uint64)pa/PGSIZE];
+  release(&ref_count_lock);
+  if (temp > 0)
+    return;
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -72,8 +85,13 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r) {
     kmem.freelist = r->next;
+    acquire(&ref_count_lock);
+    // initialization the ref count to 1
+    useReference[(uint64)r / PGSIZE] = 1;
+    release(&ref_count_lock);
+  }
   release(&kmem.lock);
 
   if(r)
